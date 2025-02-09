@@ -11,8 +11,8 @@ use rand::Rng;
 use std::io::{self, stdout, Stdout, Write};
 use std::{thread, time::Duration};
 
-const FIELD_LINES: usize = 20;
-const FIELD_COLS: usize = 30;
+const FIELD_LINES: usize = 16;
+const FIELD_COLS: usize = 25;
 
 #[derive(Debug, Copy, Clone)]
 enum Tile {
@@ -267,7 +267,7 @@ impl Window {
         self.pixel(stdout, self.size.x, self.size.y,'┘')?;
 
         if let Some(name) = &self.title {
-            let title = format!("┤ {} ├", name);
+            let title = format!("[ {} ]", name);
             self.print_str(stdout, self.size.x / 2 - name.len() as u16 / 2, 0, &title)?;
         }
 
@@ -289,7 +289,7 @@ impl Renderer {
 
         Self {
             stdout: io::stdout(),
-            game_window: Window::new(columns / 2 - width / 2 , rows / 2 - height / 2, width, height)
+            game_window: Window::new(columns / 2 - width / 2 , rows / 2 - height / 2 - 1, width, height)
         }
     }
 
