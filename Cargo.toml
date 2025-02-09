@@ -1,7 +1,9 @@
 [package]
 name = "snake-tui"
 version = "0.1.0"
-edition = "2021"
+description = "A cross platform snake game running in the terminal"
+license = ""
+
 
 [dependencies]
 crossterm = "0.28.1"
