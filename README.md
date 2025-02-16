@@ -38,7 +38,7 @@ To build the project from source, follow these steps:
 
 1. Clone the repository
     ```bash
-    git clone https://github.com/yourusername/snake-tui.git
+    git clone https://github.com/RiccardoSegala04/snake-tui.git
     cd snake-tui
     ```
 2. Build the project using cargo
