@@ -3,7 +3,7 @@ use crossterm::{
     cursor::MoveTo,
     event::{poll, read, Event, KeyCode},
     queue,
-    style::{Print, StyledContent, Stylize, Color},
+    style::{Print, StyledContent, Stylize, Color, ContentStyle},
     terminal::{self, size, disable_raw_mode, enable_raw_mode, Clear},
     ExecutableCommand, QueueableCommand,
 };
@@ -275,9 +275,42 @@ impl Window {
     }
 }
 
+trait Drawable {
+    fn draw(&self, renderer: &mut Renderer, window: &Window) -> Result<(), io::Error>; 
+}
+
+impl Drawable for Game {
+    fn draw(&self, renderer: &mut Renderer, window: &Window) -> Result<(), io::Error> {
+        let size = Vec2 {
+            x: ((game.field()[0].len() + 1) * 2) as u16,
+            y: (game.field().len() + 1) as u16,
+        };
+
+        let title = format!("Apples: {}", self.points());
+        window.set_title(&title);
+        window.draw(&mut self.stdout)?;
+
+        for y in 0..game.field().len() {
+            for x in 0..game.field()[0].len() {
+
+                let tile_ch = match game.field()[y][x] {
+                    Tile::Snake(v) => ' '.on_green(),
+                    Tile::Apple => ' '.on_red(),
+                    _ => ' '.blue(),
+                };
+
+                window.inner().pixel_styled(renderer, x*2, y, tile_ch)?;
+                window.inner().pixel_styled(renderer, x*2 + 1, y, tile_ch)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 struct Renderer {
     stdout: Stdout,
-    game_window: Window
+    game_window: Window,
 }
 
 impl Renderer {
@@ -289,7 +322,7 @@ impl Renderer {
 
         Self {
             stdout: io::stdout(),
-            game_window: Window::new(columns / 2 - width / 2 , rows / 2 - height / 2 - 1, width, height)
+            game_window: Window::new(columns / 2 - width / 2 , rows / 2 - height / 2 - 1, width, height),
         }
     }
 
@@ -319,7 +352,12 @@ impl Renderer {
         Ok(())
     }
 
-    fn pixel(&mut self, p: Vec2, c: StyledContent<char>) -> Result<(), io::Error> {
+    fn pixel(&mut self, p: Vec2, c: char) -> Result<(), io::Error> {
+        self.pixel_styled(p, StyledContent::new(ContentStyle::new(), c))?;
+        Ok(())
+    }
+
+    fn pixel_styled(&mut self, p: Vec2, c: StyledContent<char>) -> Result<(), io::Error> {
         queue!(self.stdout, MoveTo(p.x, p.y), Print(&c))?;
         Ok(())
     }
