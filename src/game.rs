@@ -12,16 +12,6 @@ pub enum Tile {
     Free,
 }
 
-impl Tile {
-    fn to_char(&self) -> char {
-        match self {
-            Tile::Snake(_) => ' ',
-            Tile::Apple => ' ',
-            Tile::Free => ' ',
-        }
-    }
-}
-
 type Field = [[Tile; FIELD_COLS]; FIELD_LINES];
 
 #[derive(PartialEq)]
@@ -60,17 +50,14 @@ pub struct Game {
 
 impl Game {
     pub fn new() -> Self {
-        let mut field = [[Tile::Free; FIELD_COLS]; FIELD_LINES];
 
-        let mut game = Self {
+        Self {
             head: Vec2::new(0, 0),
             length: 1,
             direction: Direction::Right,
-            field,
+            field: [[Tile::Free; FIELD_COLS]; FIELD_LINES],
             state: GameState::Starting,
-        };
-
-        game
+        }
 
     }
 
@@ -159,10 +146,10 @@ impl Game {
     }
 
     fn generate_position(&self) -> (usize, usize) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         loop {
-            let line: usize = rng.gen_range(0..FIELD_LINES);
-            let col: usize = rng.gen_range(0..FIELD_COLS);
+            let line: usize = rng.random_range(0..FIELD_LINES);
+            let col: usize = rng.random_range(0..FIELD_COLS);
 
             if let Tile::Free = self.field[line][col] {
                 return (line as usize, col as usize);

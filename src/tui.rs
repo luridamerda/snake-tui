@@ -3,40 +3,39 @@ use crate::util::Vec2;
 use crossterm::{
     cursor,
     cursor::MoveTo,
-    event::{poll, read, Event, KeyCode},
     queue,
-    style::{Print, StyledContent, Stylize, Color, ContentStyle},
+    style::{Print, StyledContent, ContentStyle},
     terminal::{self, size, disable_raw_mode, enable_raw_mode, Clear},
-    ExecutableCommand, QueueableCommand,
+    ExecutableCommand, 
 };
-use std::io::{self, stdout, Stdout, Write};
-use std::{thread, time::Duration};
+use std::io::{self, Stdout, Write};
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Window {
     pos: Vec2,
     size: Vec2,
-    title: Option<String>
+    title: Option<String>,
+    renderer: Rc<RefCell<Renderer>>
 }
 
+#[allow(dead_code)]
 impl Window {
 
-    pub fn new(x: u16, y: u16, width: u16, height: u16) -> Self {
+    pub fn new(renderer: Rc<RefCell<Renderer>>, x: u16, y: u16, width: u16, height: u16) -> Self {
         Self {
             pos: Vec2{x, y},
             size: Vec2{x: width, y: height},
             title: None,
+            renderer
         }
     }
 
-    pub fn centered(renderer: &Renderer, width: u16, height: u16) -> Self {
-        let (x, y) = renderer.center_point();
+    pub fn centered(renderer: Rc<RefCell<Renderer>>, width: u16, height: u16) -> Self {
+        let (x, y) = renderer.borrow().center_point();
 
-        Self {
-            pos: Vec2{x: x - width/2, y: y - height/2},
-            size: Vec2{x: width, y: height},
-            title: None
-        }
-            
+        Window::new(renderer, x - width/2, y - height/2, width, height)
     }
 
     pub fn set_title(&mut self, title: &str) {
@@ -48,6 +47,7 @@ impl Window {
             pos: Vec2{x: self.pos.x+1, y: self.pos.y+1},
             size: Vec2{x: self.size.x-2, y: self.size.y-2},
             title: None,
+            renderer: self.renderer.clone()
         }
     }
 
@@ -56,47 +56,48 @@ impl Window {
             pos: Vec2{x: self.pos.x-1, y: self.pos.y-1},
             size: Vec2{x: self.size.x+2, y: self.size.y+2},
             title: None,
+            renderer: self.renderer.clone()
         }
     }
 
-    pub fn pixel(&self, renderer: &mut Renderer, x: u16, y: u16, c: char) -> Result<(), io::Error> {
-        renderer.pixel(self.pos.x + x, self.pos.y + y, c)?;
+    pub fn pixel(&self, x: u16, y: u16, c: char) -> Result<(), io::Error> {
+        self.renderer.borrow_mut().pixel(self.pos.x + x, self.pos.y + y, c)?;
         Ok(())
     }
 
-    pub fn pixel_styled(&self, renderer:&mut Renderer, x: u16, y: u16, c: StyledContent<char>) -> Result<(), io::Error> {
-        renderer.pixel_styled(self.pos.x + x, self.pos.y + y, c)?;
+    pub fn pixel_styled(&self, x: u16, y: u16, c: StyledContent<char>) -> Result<(), io::Error> {
+        self.renderer.borrow_mut().pixel_styled(self.pos.x + x, self.pos.y + y, c)?;
         Ok(())
     }
 
-    pub fn print_str(&self, renderer: &mut Renderer, x: u16, y: u16, s: &str) -> Result<(), io::Error> {
-        renderer.print_str(x + self.pos.x, y + self.pos.y, s)?;
+    pub fn print_str(&self, x: u16, y: u16, s: &str) -> Result<(), io::Error> {
+        self.renderer.borrow_mut().print_str(x + self.pos.x, y + self.pos.y, s)?;
         Ok(())
     } 
 
-    pub fn print_centered_str(&self, renderer: &mut Renderer, y: u16, s: &str) -> Result<(), io::Error> {
-        renderer.print_str(self.size.x / 2 - (s.chars().count() / 2) as u16 + self.pos.x, y + self.pos.y, s)?;
+    pub fn print_centered_str(&self, y: u16, s: &str) -> Result<(), io::Error> {
+        self.renderer.borrow_mut().print_str(self.size.x / 2 - (s.chars().count() / 2) as u16 + self.pos.x, y + self.pos.y, s)?;
         Ok(())
     } 
 
-    pub fn draw_borders(&self, renderer: &mut Renderer) -> Result<(), io::Error> {
+    pub fn draw_borders(&self) -> Result<(), io::Error> {
         for y in 1..self.size.y {
-            self.pixel(renderer, 0, y,'│')?;
-            self.pixel(renderer, self.size.x, y,'│')?;
+            self.pixel(0, y,'│')?;
+            self.pixel(self.size.x, y,'│')?;
         }
         for x in 1..self.size.x {
-            self.pixel(renderer, x, 0,'─')?;
-            self.pixel(renderer, x, self.size.y,'─')?;
+            self.pixel(x, 0,'─')?;
+            self.pixel(x, self.size.y,'─')?;
         }
 
-        self.pixel(renderer, 0, 0,'┌')?;
-        self.pixel(renderer, self.size.x, 0,'┐')?;
-        self.pixel(renderer, 0, self.size.y,'└')?;
-        self.pixel(renderer, self.size.x, self.size.y,'┘')?;
+        self.pixel(0, 0,'┌')?;
+        self.pixel(self.size.x, 0,'┐')?;
+        self.pixel(0, self.size.y,'└')?;
+        self.pixel(self.size.x, self.size.y,'┘')?;
 
         if let Some(name) = &self.title {
             let title = format!("[ {} ]", name);
-            self.print_centered_str(renderer, 0, &title)?;
+            self.print_centered_str(0, &title)?;
         }
 
         Ok(())
@@ -105,16 +106,12 @@ impl Window {
 
 pub struct Renderer {
     stdout: Stdout,
-    game_window: Window,
 }
 
 impl Renderer {
     pub fn new() -> Self {
-        let (columns, rows) = size().unwrap();
-
         Self {
             stdout: io::stdout(),
-            game_window: Window::new(columns / 2 - 34 / 2 , rows / 2 - 26 / 2 - 1, 34, 26),
         }
     }
 
